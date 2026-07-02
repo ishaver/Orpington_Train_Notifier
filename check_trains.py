@@ -58,16 +58,20 @@ def fetch_departures():
 
 
 def send_notification(title, message, priority="default", tags=None):
-    headers = {
-        "Title": title,
-        "Priority": priority,
+    # Use ntfy's JSON publish endpoint rather than custom headers — headers
+    # must be Latin-1, which breaks on emoji/unicode in the title. JSON body
+    # handles UTF-8 fine.
+    payload = {
+        "topic": NTFY_TOPIC,
+        "title": title,
+        "message": message,
+        "priority": {"min": 1, "low": 2, "default": 3, "high": 4, "max": 5}.get(priority, 3),
     }
     if tags:
-        headers["Tags"] = tags
+        payload["tags"] = [t.strip() for t in tags.split(",")]
     requests.post(
-        f"https://ntfy.sh/{NTFY_TOPIC}",
-        data=message.encode("utf-8"),
-        headers=headers,
+        "https://ntfy.sh/",
+        json=payload,
         timeout=10,
     )
 
