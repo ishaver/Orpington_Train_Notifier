@@ -42,7 +42,7 @@ jobs:
           TO_CRS: ORP
           FROM_NAME: Charing Cross
           TO_NAME: Orpington
-          START_HOUR: "17"
-          CUTOFF_HOUR: "19"
+          START_TIME: "17:00"
+          CUTOFF_TIME: "19:00"
           STATE_FILE: state-evening.json
         run: python check_trains.py
