@@ -25,8 +25,8 @@ TO_CRS = os.environ.get("TO_CRS", "LBG")                 # London Bridge
 FROM_NAME = os.environ.get("FROM_NAME", "Orpington")
 TO_NAME = os.environ.get("TO_NAME", "London Bridge")
 NUM_ROWS = int(os.environ.get("NUM_ROWS", "10"))          # upcoming departures to check
-START_HOUR = int(os.environ.get("START_HOUR", "5"))        # ignore runs before this local hour
-CUTOFF_HOUR = int(os.environ.get("CUTOFF_HOUR", "10"))      # stop notifying at/after this local hour
+START_TIME = os.environ.get("START_TIME", "05:00")         # local "HH:MM", ignore runs before this
+CUTOFF_TIME = os.environ.get("CUTOFF_TIME", "10:00")        # local "HH:MM", stop notifying at/after this
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")     # separate file per route to keep dedup independent
 HUXLEY_BASE = "https://huxley2.azurewebsites.net"
 
@@ -85,8 +85,8 @@ def main():
     now = get_local_time()
     today_key = now.strftime("%Y-%m-%d")
 
-    if not (START_HOUR <= now.hour < CUTOFF_HOUR):
-        print(f"Local time {now.strftime('%H:%M')} is outside the {START_HOUR}:00-{CUTOFF_HOUR}:00 "
+    if not (START_TIME <= now.strftime("%H:%M") < CUTOFF_TIME):
+        print(f"Local time {now.strftime('%H:%M')} is outside the {START_TIME}-{CUTOFF_TIME} "
               f"window — skipping.")
         return
 
