@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Checks Southeastern departures from Orpington (ORP) to London Bridge (LBG)
-using the Huxley2 public proxy for National Rail's Darwin API, and sends
-a push notification via ntfy.sh if any train is delayed or cancelled.
+Checks Southeastern departures between two stations (via the Huxley2 proxy
+for National Rail's Darwin API) and sends a push notification via ntfy.sh
+if any train is delayed or cancelled.
 
-Only sends notifications during the morning commute window (default:
-before 10:00 Europe/London time) — outside that window it exits quietly.
+Only sends notifications inside a configurable local time window — outside
+that window it exits quietly. Configure via environment variables so the
+same script can drive multiple routes/windows (e.g. morning commute in,
+evening commute back) from different GitHub Actions workflows.
 """
 
 import json
@@ -16,14 +18,17 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-# ---- Config ----
-FROM_CRS = "ORP"          # Orpington
-TO_CRS = "LBG"             # London Bridge
-NUM_ROWS = 10               # how many upcoming departures to check
-CUTOFF_HOUR = 10            # stop notifying at/after this local hour (24h)
-START_HOUR = 5               # ignore runs before this local hour (safety net)
+# ---- Config (all overridable via env vars, so one script can serve
+# multiple routes from different workflow files) ----
+FROM_CRS = os.environ.get("FROM_CRS", "ORP")            # Orpington
+TO_CRS = os.environ.get("TO_CRS", "LBG")                 # London Bridge
+FROM_NAME = os.environ.get("FROM_NAME", "Orpington")
+TO_NAME = os.environ.get("TO_NAME", "London Bridge")
+NUM_ROWS = int(os.environ.get("NUM_ROWS", "10"))          # upcoming departures to check
+START_HOUR = int(os.environ.get("START_HOUR", "5"))        # ignore runs before this local hour
+CUTOFF_HOUR = int(os.environ.get("CUTOFF_HOUR", "10"))      # stop notifying at/after this local hour
+STATE_FILE = os.environ.get("STATE_FILE", "state.json")     # separate file per route to keep dedup independent
 HUXLEY_BASE = "https://huxley2.azurewebsites.net"
-STATE_FILE = "state.json"
 
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC")
 if not NTFY_TOPIC:
@@ -126,9 +131,9 @@ def main():
 
         if etd.strip().lower() == "cancelled":
             reason = svc.get("cancelReason", "")
-            problems.append(f"{std} to London Bridge — CANCELLED" + (f" ({reason})" if reason else ""))
+            problems.append(f"{std} to {TO_NAME} — CANCELLED" + (f" ({reason})" if reason else ""))
         else:
-            problems.append(f"{std} to London Bridge — now expected {etd} (platform {platform})")
+            problems.append(f"{std} to {TO_NAME} — now expected {etd} (platform {platform})")
 
     save_state(state)
 
@@ -136,7 +141,7 @@ def main():
         message = "\n".join(problems)
         print("Delays/cancellations found:\n" + message)
         send_notification(
-            title="⚠️ Southeastern: Orpington → London Bridge",
+            title=f"⚠️ Southeastern: {FROM_NAME} → {TO_NAME}",
             message=message,
             priority="high",
             tags="warning,train",
