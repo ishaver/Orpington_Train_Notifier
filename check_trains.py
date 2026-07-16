@@ -55,11 +55,48 @@ def save_state(state):
         json.dump(state, f)
 
 
-def fetch_departures():
-    url = f"{HUXLEY_BASE}/departures/{FROM_CRS}/to/{TO_CRS}/{NUM_ROWS}"
-    resp = requests.get(url, timeout=20)
+RAW_ROWS = min(max(NUM_ROWS * 4, 20), 50)  # extra headroom when fetching unfiltered
+
+
+def _get(url, timeout=20):
+    resp = requests.get(url, timeout=timeout, headers={"User-Agent": "orpington-train-notifier"})
     resp.raise_for_status()
     return resp.json()
+
+
+def _service_calls_at(svc, crs):
+    """True if TO_CRS appears anywhere in this service's calling points
+    (used when we fetch the unfiltered board and filter ourselves)."""
+    for group_key in ("subsequentCallingPoints", "previousCallingPoints"):
+        for group in svc.get(group_key) or []:
+            for cp in group.get("callingPoint") or []:
+                if cp.get("crs") == crs:
+                    return True
+    return False
+
+
+def fetch_departures():
+    """Fetch departures from FROM_CRS heading to TO_CRS.
+
+    Tries Huxley2's built-in `to/` destination filter first. That filter
+    has been unreliable for some station pairs (intermittent 500s from the
+    upstream Darwin API), so on failure we fall back to fetching the
+    unfiltered board and filtering client-side using each service's
+    calling points.
+    """
+    filtered_url = f"{HUXLEY_BASE}/departures/{FROM_CRS}/to/{TO_CRS}/{NUM_ROWS}"
+    for attempt in range(2):
+        try:
+            return _get(filtered_url)
+        except requests.RequestException as e:
+            print(f"Filtered request failed (attempt {attempt + 1}): {e}", file=sys.stderr)
+
+    print("Falling back to unfiltered board + client-side filtering.", file=sys.stderr)
+    unfiltered_url = f"{HUXLEY_BASE}/departures/{FROM_CRS}/{RAW_ROWS}"
+    data = _get(unfiltered_url)
+    all_services = data.get("trainServices") or []
+    data["trainServices"] = [s for s in all_services if _service_calls_at(s, TO_CRS)][:NUM_ROWS]
+    return data
 
 
 def send_notification(title, message, priority="default", tags=None):
