@@ -42,7 +42,7 @@ jobs:
           TO_CRS: LBG
           FROM_NAME: Orpington
           TO_NAME: London Bridge
-          START_HOUR: "5"
-          CUTOFF_HOUR: "10"
+          START_TIME: "05:00"
+          CUTOFF_TIME: "10:00"
           STATE_FILE: state-morning.json
         run: python check_trains.py
