@@ -1,0 +1,50 @@
+name: Southeastern Blackfriars -> London Bridge notifier
+
+on:
+  schedule:
+    # Runs every 5 minutes, 15:00-19:59 UTC, Mon-Fri.
+    # This window covers 16:30-19:00 local time in both BST and GMT
+    # (16:30 BST = 15:30 UTC, 16:30 GMT = 16:30 UTC); the script itself
+    # double-checks local time down to the minute and stays quiet outside
+    # the actual 16:30-19:00 window.
+    - cron: "*/5 15-19 * * 1-5"
+  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
+
+jobs:
+  check-trains:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Get today's date (UK time) for cache key
+        id: date
+        run: echo "date=$(TZ='Europe/London' date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore notification state
+        uses: actions/cache@v4
+        with:
+          path: state-blackfriars.json
+          key: train-state-blackfriars-${{ steps.date.outputs.date }}
+          restore-keys: |
+            train-state-blackfriars-
+
+      - name: Check trains and notify
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          FROM_CRS: BFR
+          TO_CRS: LBG
+          FROM_NAME: London Blackfriars
+          TO_NAME: London Bridge
+          START_TIME: "16:30"
+          CUTOFF_TIME: "19:00"
+          STATE_FILE: state-blackfriars.json
+        run: python check_trains.py
